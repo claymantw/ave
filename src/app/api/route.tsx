@@ -6,7 +6,7 @@ export const runtime = "edge";
 
 type BaseParams = {
   address: `0x${string}`;
-  data: string;
+  data?: string;
 };
 
 export async function GET(request: NextRequest) {
@@ -15,15 +15,8 @@ export async function GET(request: NextRequest) {
     searchParams.entries()
   ) as BaseParams;
 
-  if (!address || !data)
-    return NextResponse.json(
-      {
-        error: "address and data are required",
-      },
-      {
-        status: 400,
-      }
-    );
+  if (!address)
+    return NextResponse.json({ error: "address is required" }, { status: 400 });
 
   const inter = await fetch(
     new URL("../../assets/fonts/Inter-Bold.ttf", import.meta.url)
@@ -97,7 +90,7 @@ export async function GET(request: NextRequest) {
                   color: "white",
                 }}
               >
-                {data.substring(0, 7)}
+                {(data || "0").substring(0, 7)}
               </p>
             </div>
           </div>
