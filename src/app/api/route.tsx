@@ -9,52 +9,47 @@ type BaseParams = {
   data?: string;
 };
 
-// Fungsi untuk menghasilkan warna dari hash alamat
-function generateColorFromAddress(address: string): string {
-  const hash = address.slice(2, 8); // Ambil 6 karakter untuk warna
-  return `#${hash}`;
+// Fungsi untuk menghasilkan warna biru dari hash alamat
+function generateBlueColorsFromAddress(address: string): { primary: string; secondary: string } {
+  const hash = parseInt(address.slice(2, 10), 16);
+  const hue = 180 + (hash % 60); // Hue biru (180-240: biru langit hingga biru tua)
+  const primary = `hsl(${hue}, 70%, 50%)`; // Warna primer
+  const secondary = `hsl(${hue + 20}, 80%, 60%)`; // Warna sekunder lebih cerah
+  return { primary, secondary };
 }
 
-// Fungsi untuk menghasilkan pola abstrak berdasarkan data
-function generateAbstractPattern(data: string): { x1: number; y1: number; x2: number; y2: number; thickness: number }[] {
-  const lines: { x1: number; y1: number; x2: number; y2: number; thickness: number }[] = [];
-  const seed = data ? parseInt(data.slice(2, 10), 16) : 0; // Gunakan 8 karakter dari data sebagai seed
-  const count = data ? Math.min(10, parseInt(data.slice(-2), 16) || 5) : 5; // Jumlah garis
+// Fungsi untuk menghasilkan pola ombak vertikal
+function generateWavePattern(address: string): { x1: number; x2: number; cx1: number; cy1: number; cx2: number; cy2: number }[] {
+  const waves: { x1: number; x2: number; cx1: number; cy1: number; cx2: number; cy2: number }[] = [];
+  const seed = parseInt(address.slice(2, 10), 16); // Seed dari address
+  const count = 5 + (seed % 6); // Jumlah ombak (5-10)
 
   for (let i = 0; i < count; i++) {
-    const angle = (seed + i * 72) % 360; // Distribusi sudut untuk pola abstrak
-    const offset = (seed + i * 17) % 100; // Offset untuk variasi
-    const x1 = 100 + (offset % 220); // Mulai dari sisi kiri
-    const y1 = 20 + (offset % 104); // Variasi vertikal
-    const x2 = x1 + 50 * Math.cos((angle * Math.PI) / 180); // Panjang garis
-    const y2 = y1 + 50 * Math.sin((angle * Math.PI) / 180);
-    const thickness = 2 + (seed % 5); // Ketebalan garis bervariasi
-    lines.push({ x1, y1, x2, y2, thickness });
+    const x = 50 + (i * 400) / (count - 1); // Distribusi horizontal
+    const offset = (seed + i * 37) % 200; // Offset untuk variasi
+    const x1 = x; // Titik awal (atas)
+    const x2 = x; // Titik akhir (bawah)
+    const cx1 = x + (offset % 100) - 50; // Titik kontrol 1 (lengkungan)
+    const cy1 = 150 + (offset % 100); // Ketinggian kontrol 1
+    const cx2 = x - (offset % 80) + 40; // Titik kontrol 2
+    const cy2 = 350 - (offset % 100); // Ketinggian kontrol 2
+    waves.push({ x1, x2, cx1, cy1, cx2, cy2 });
   }
-  return lines;
+  return waves;
 }
 
 export async function GET(request: NextRequest) {
   const searchParams = new URLSearchParams(request.url?.split("?")[1]);
-  const { address, data } = Object.fromEntries(searchParams.entries()) as BaseParams;
+  const { address } = Object.fromEntries(searchParams.entries()) as BaseParams;
 
   // Validasi alamat
   if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
     return NextResponse.json({ error: "valid address is required" }, { status: 400 });
   }
 
-  // Ambil font Inter
-  const inter = await fetch(
-    new URL("../../assets/fonts/Inter-Bold.ttf", import.meta.url)
-  )
-    .then((res) => res.arrayBuffer())
-    .catch((e) => {
-      throw new Error("failed to fetch font: inter", e);
-    });
-
   try {
-    const color = generateColorFromAddress(address); // Warna dinamis dari alamat
-    const pattern = generateAbstractPattern(data || "0x0"); // Pola abstrak dari data
+    const { primary, secondary } = generateBlueColorsFromAddress(address); // Warna biru dinamis
+    const waves = generateWavePattern(address); // Pola ombak
 
     return new ImageResponse(
       (
@@ -64,94 +59,41 @@ export async function GET(request: NextRequest) {
             width: "100%",
             height: "100%",
             background: "white",
-            padding: "0.5rem",
-            borderRadius: "9999px",
           }}
         >
-          <div
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: "4px",
-              borderColor: color, // Border dinamis
-              borderRadius: "9999px",
-              padding: "0 2rem",
-            }}
+          {/* SVG dengan pola ombak */}
+          <svg
+            width="500"
+            height="500"
+            viewBox="0 0 500 500"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
           >
-            {/* SVG dengan pola abstrak */}
-            <svg
-              width="420"
-              height="144"
-              viewBox="0 0 420 144"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* Gradien linier untuk latar belakang */}
-              <defs>
-                <linearGradient id="gradient" x1="0" y1="0" x2="420" y2="144">
-                  <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#ffffff" stopOpacity="0.1" />
-                </linearGradient>
-              </defs>
-              <rect x="0" y="0" width="420" height="144" fill="url(#gradient)" />
-              {/* Pola garis abstrak */}
-              {pattern.map((line, index) => (
-                <line
-                  key={index}
-                  x1={line.x1}
-                  y1={line.y1}
-                  x2={line.x2}
-                  y2={line.y2}
-                  stroke={color}
-                  strokeWidth={line.thickness}
-                  strokeOpacity="0.7"
-                />
-              ))}
-            </svg>
-
-            {/* Teks dinamis dengan efek abstrak */}
-            <div
-              style={{
-                display: "flex",
-                background: color, // Latar belakang dinamis
-                padding: "0.5rem 1rem",
-                borderRadius: "1rem",
-                height: "80px",
-                alignItems: "center",
-                justifyContent: "center",
-                marginLeft: "1.5rem",
-                flex: 1,
-                transform: "rotate(-5deg)", // Rotasi untuk efek abstrak
-                boxShadow: "2px 2px 5px rgba(0,0,0,0.3)", // Bayangan
-              }}
-            >
-              <p
-                style={{
-                  fontFamily: '"Inter"',
-                  fontSize: data && data.length > 7 ? "40px" : "52px", // Font fleksibel
-                  color: "white",
-                  textShadow: "1px 1px 3px rgba(0,0,0,0.5)", // Efek bayangan
-                }}
-              >
-                {(data || "0").substring(0, 7)}
-              </p>
-            </div>
-          </div>
+            {/* Gradien radial untuk latar belakang */}
+            <defs>
+              <radialGradient id="gradient" cx="50%" cy="50%" r="70%">
+                <stop offset="0%" stopColor={secondary} stopOpacity="0.5" />
+                <stop offset="100%" stopColor={primary} stopOpacity="0.2" />
+              </radialGradient>
+            </defs>
+            <rect x="0" y="0" width="500" height="500" fill="url(#gradient)" />
+            {/* Pola ombak vertikal melengkung */}
+            {waves.map((wave, index) => (
+              <path
+                key={index}
+                d={`M${wave.x1},0 C${wave.cx1},${wave.cy1} ${wave.cx2},${wave.cy2} ${wave.x2},500`}
+                stroke={index % 2 === 0 ? primary : secondary} // Alternasi warna
+                strokeWidth={8 + (index % 3)} // Ketebalan bervariasi
+                strokeOpacity="0.7"
+                fill="none"
+              />
+            ))}
+          </svg>
         </div>
       ),
       {
-        width: 420,
-        height: 144,
-        fonts: [
-          {
-            name: "Inter",
-            data: inter,
-            style: "normal",
-            weight: 700,
-          },
-        ],
+        width: 500,
+        height: 500,
       }
     );
   } catch (error) {
