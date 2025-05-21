@@ -9,31 +9,31 @@ type BaseParams = {
   data?: string;
 };
 
-// Fungsi untuk menghasilkan warna biru dari hash alamat
-function generateBlueColorsFromAddress(address: string): { primary: string; secondary: string } {
+// Fungsi untuk menghasilkan warna bebas dari hash alamat
+function generateColorsFromAddress(address: string): { primary: string; secondary: string } {
   const hash = parseInt(address.slice(2, 10), 16);
-  const hue = 180 + (hash % 60); // Hue biru (180-240: biru langit hingga biru tua)
+  const hue = hash % 360; // Hue penuh (0-360) untuk semua warna
   const primary = `hsl(${hue}, 70%, 50%)`; // Warna primer
-  const secondary = `hsl(${hue + 20}, 80%, 60%)`; // Warna sekunder lebih cerah
+  const secondary = `hsl(${(hue + 60) % 360}, 80%, 60%)`; // Warna sekunder dengan offset hue
   return { primary, secondary };
 }
 
-// Fungsi untuk menghasilkan pola ombak vertikal
-function generateWavePattern(address: string): { x1: number; x2: number; cx1: number; cy1: number; cx2: number; cy2: number }[] {
-  const waves: { x1: number; x2: number; cx1: number; cy1: number; cx2: number; cy2: number }[] = [];
+// Fungsi untuk menghasilkan pola ombak horizontal
+function generateWavePattern(address: string): { y1: number; y2: number; cx1: number; cy1: number; cx2: number; cy2: number }[] {
+  const waves: { y1: number; y2: number; cx1: number; cy1: number; cx2: number; cy2: number }[] = [];
   const seed = parseInt(address.slice(2, 10), 16); // Seed dari address
-  const count = 5 + (seed % 6); // Jumlah ombak (5-10)
+  const count = 18 + (seed % 4); // Jumlah ombak (18-21)
 
   for (let i = 0; i < count; i++) {
-    const x = 50 + (i * 400) / (count - 1); // Distribusi horizontal
-    const offset = (seed + i * 37) % 200; // Offset untuk variasi
-    const x1 = x; // Titik awal (atas)
-    const x2 = x; // Titik akhir (bawah)
-    const cx1 = x + (offset % 100) - 50; // Titik kontrol 1 (lengkungan)
-    const cy1 = 150 + (offset % 100); // Ketinggian kontrol 1
-    const cx2 = x - (offset % 80) + 40; // Titik kontrol 2
-    const cy2 = 350 - (offset % 100); // Ketinggian kontrol 2
-    waves.push({ x1, x2, cx1, cy1, cx2, cy2 });
+    const y = 50 + (i * 900) / (count - 1); // Distribusi vertikal
+    const offset = (seed + i * 41) % 300; // Offset untuk variasi
+    const y1 = y; // Titik awal (kiri)
+    const y2 = y; // Titik akhir (kanan)
+    const cx1 = 250 + (offset % 200) - 100; // Titik kontrol 1 (lengkungan)
+    const cy1 = y + (offset % 150) - 75; // Ketinggian kontrol 1
+    const cx2 = 750 - (offset % 180) + 90; // Titik kontrol 2
+    const cy2 = y - (offset % 150) + 75; // Ketinggian kontrol 2
+    waves.push({ y1, y2, cx1, cy1, cx2, cy2 });
   }
   return waves;
 }
@@ -48,8 +48,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { primary, secondary } = generateBlueColorsFromAddress(address); // Warna biru dinamis
-    const waves = generateWavePattern(address); // Pola ombak
+    const { primary, secondary } = generateColorsFromAddress(address); // Warna bebas dinamis
+    const waves = generateWavePattern(address); // Pola ombak horizontal
 
     return new ImageResponse(
       (
@@ -63,9 +63,9 @@ export async function GET(request: NextRequest) {
         >
           {/* SVG dengan pola ombak */}
           <svg
-            width="500"
-            height="500"
-            viewBox="0 0 500 500"
+            width="1000"
+            height="1000"
+            viewBox="0 0 1000 1000"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
           >
@@ -76,15 +76,15 @@ export async function GET(request: NextRequest) {
                 <stop offset="100%" stopColor={primary} stopOpacity="0.2" />
               </radialGradient>
             </defs>
-            <rect x="0" y="0" width="500" height="500" fill="url(#gradient)" />
-            {/* Pola ombak vertikal melengkung */}
+            <rect x="0" y="0" width="1000" height="1000" fill="url(#gradient)" />
+            {/* Pola ombak horizontal melengkung */}
             {waves.map((wave, index) => (
               <path
                 key={index}
-                d={`M${wave.x1},0 C${wave.cx1},${wave.cy1} ${wave.cx2},${wave.cy2} ${wave.x2},500`}
+                d={`M0,${wave.y1} C${wave.cx1},${wave.cy1} ${wave.cx2},${wave.cy2} 1000,${wave.y2}`}
                 stroke={index % 2 === 0 ? primary : secondary} // Alternasi warna
-                strokeWidth={8 + (index % 3)} // Ketebalan bervariasi
-                strokeOpacity="0.7"
+                strokeWidth={10 + (index % 5)} // Ketebalan bervariasi (10-14)
+                strokeOpacity="0.6"
                 fill="none"
               />
             ))}
@@ -92,8 +92,8 @@ export async function GET(request: NextRequest) {
         </div>
       ),
       {
-        width: 500,
-        height: 500,
+        width: 1000,
+        height: 1000,
       }
     );
   } catch (error) {
