@@ -15,21 +15,23 @@ function generateColorFromAddress(address: string): string {
   return `#${hash}`;
 }
 
-// Fungsi untuk menghasilkan pola dinamis berdasarkan data
-function generatePattern(data: string): { x: number; y: number; size: number }[] {
-  const points: { x: number; y: number; size: number }[] = [];
+// Fungsi untuk menghasilkan pola abstrak berdasarkan data
+function generateAbstractPattern(data: string): { x1: number; y1: number; x2: number; y2: number; thickness: number }[] {
+  const lines: { x1: number; y1: number; x2: number; y2: number; thickness: number }[] = [];
   const seed = data ? parseInt(data.slice(2, 10), 16) : 0; // Gunakan 8 karakter dari data sebagai seed
-  const count = data ? Math.min(12, parseInt(data.slice(-2), 16) || 6) : 6; // Jumlah lingkaran
+  const count = data ? Math.min(10, parseInt(data.slice(-2), 16) || 5) : 5; // Jumlah garis
 
   for (let i = 0; i < count; i++) {
-    const angle = (seed + i * 137.5) % 360; // Pola phyllotaxis
-    const radius = 20 * Math.sqrt(i);
-    const x = 210 + radius * Math.cos((angle * Math.PI) / 180); // Pusat di 420/2
-    const y = 72 + radius * Math.sin((angle * Math.PI) / 180); // Pusat di 144/2
-    const size = 5 + (seed % 8); // Ukuran lingkaran bervariasi
-    points.push({ x, y, size });
+    const angle = (seed + i * 72) % 360; // Distribusi sudut untuk pola abstrak
+    const offset = (seed + i * 17) % 100; // Offset untuk variasi
+    const x1 = 100 + (offset % 220); // Mulai dari sisi kiri
+    const y1 = 20 + (offset % 104); // Variasi vertikal
+    const x2 = x1 + 50 * Math.cos((angle * Math.PI) / 180); // Panjang garis
+    const y2 = y1 + 50 * Math.sin((angle * Math.PI) / 180);
+    const thickness = 2 + (seed % 5); // Ketebalan garis bervariasi
+    lines.push({ x1, y1, x2, y2, thickness });
   }
-  return points;
+  return lines;
 }
 
 export async function GET(request: NextRequest) {
@@ -52,7 +54,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const color = generateColorFromAddress(address); // Warna dinamis dari alamat
-    const pattern = generatePattern(data || "0x0"); // Pola dinamis dari data
+    const pattern = generateAbstractPattern(data || "0x0"); // Pola abstrak dari data
 
     return new ImageResponse(
       (
@@ -78,7 +80,7 @@ export async function GET(request: NextRequest) {
               padding: "0 2rem",
             }}
           >
-            {/* SVG dengan pola dinamis */}
+            {/* SVG dengan pola abstrak */}
             <svg
               width="420"
               height="144"
@@ -86,22 +88,30 @@ export async function GET(request: NextRequest) {
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
-              {/* Latar belakang lingkaran transparan */}
-              <circle cx="210" cy="72" r="60" fill={color} fillOpacity="0.2" />
-              {/* Pola lingkaran dinamis */}
-              {pattern.map((point, index) => (
-                <circle
+              {/* Gradien linier untuk latar belakang */}
+              <defs>
+                <linearGradient id="gradient" x1="0" y1="0" x2="420" y2="144">
+                  <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#ffffff" stopOpacity="0.1" />
+                </linearGradient>
+              </defs>
+              <rect x="0" y="0" width="420" height="144" fill="url(#gradient)" />
+              {/* Pola garis abstrak */}
+              {pattern.map((line, index) => (
+                <line
                   key={index}
-                  cx={point.x}
-                  cy={point.y}
-                  r={point.size}
-                  fill={color}
-                  fillOpacity="0.8"
+                  x1={line.x1}
+                  y1={line.y1}
+                  x2={line.x2}
+                  y2={line.y2}
+                  stroke={color}
+                  strokeWidth={line.thickness}
+                  strokeOpacity="0.7"
                 />
               ))}
             </svg>
 
-            {/* Teks dinamis */}
+            {/* Teks dinamis dengan efek abstrak */}
             <div
               style={{
                 display: "flex",
@@ -113,6 +123,8 @@ export async function GET(request: NextRequest) {
                 justifyContent: "center",
                 marginLeft: "1.5rem",
                 flex: 1,
+                transform: "rotate(-5deg)", // Rotasi untuk efek abstrak
+                boxShadow: "2px 2px 5px rgba(0,0,0,0.3)", // Bayangan
               }}
             >
               <p
@@ -120,6 +132,7 @@ export async function GET(request: NextRequest) {
                   fontFamily: '"Inter"',
                   fontSize: data && data.length > 7 ? "40px" : "52px", // Font fleksibel
                   color: "white",
+                  textShadow: "1px 1px 3px rgba(0,0,0,0.5)", // Efek bayangan
                 }}
               >
                 {(data || "0").substring(0, 7)}
