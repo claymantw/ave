@@ -9,15 +9,39 @@ type BaseParams = {
   data?: string;
 };
 
+// Fungsi untuk menghasilkan warna dari hash alamat
+function generateColorFromAddress(address: string): string {
+  const hash = address.slice(2, 8); // Ambil 6 karakter untuk warna
+  return `#${hash}`;
+}
+
+// Fungsi untuk menghasilkan pola dinamis berdasarkan data
+function generatePattern(data: string): { x: number; y: number; size: number }[] {
+  const points: { x: number; y: number; size: number }[] = [];
+  const seed = data ? parseInt(data.slice(2, 10), 16) : 0; // Gunakan 8 karakter dari data sebagai seed
+  const count = data ? Math.min(12, parseInt(data.slice(-2), 16) || 6) : 6; // Jumlah lingkaran
+
+  for (let i = 0; i < count; i++) {
+    const angle = (seed + i * 137.5) % 360; // Pola phyllotaxis
+    const radius = 20 * Math.sqrt(i);
+    const x = 210 + radius * Math.cos((angle * Math.PI) / 180); // Pusat di 420/2
+    const y = 72 + radius * Math.sin((angle * Math.PI) / 180); // Pusat di 144/2
+    const size = 5 + (seed % 8); // Ukuran lingkaran bervariasi
+    points.push({ x, y, size });
+  }
+  return points;
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = new URLSearchParams(request.url?.split("?")[1]);
-  const { address, data } = Object.fromEntries(
-    searchParams.entries()
-  ) as BaseParams;
+  const { address, data } = Object.fromEntries(searchParams.entries()) as BaseParams;
 
-  if (!address)
-    return NextResponse.json({ error: "address is required" }, { status: 400 });
+  // Validasi alamat
+  if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
+    return NextResponse.json({ error: "valid address is required" }, { status: 400 });
+  }
 
+  // Ambil font Inter
   const inter = await fetch(
     new URL("../../assets/fonts/Inter-Bold.ttf", import.meta.url)
   )
@@ -27,6 +51,9 @@ export async function GET(request: NextRequest) {
     });
 
   try {
+    const color = generateColorFromAddress(address); // Warna dinamis dari alamat
+    const pattern = generatePattern(data || "0x0"); // Pola dinamis dari data
+
     return new ImageResponse(
       (
         <div
@@ -36,7 +63,7 @@ export async function GET(request: NextRequest) {
             height: "100%",
             background: "white",
             padding: "0.5rem",
-            borderRadius: "9999",
+            borderRadius: "9999px",
           }}
         >
           <div
@@ -46,34 +73,39 @@ export async function GET(request: NextRequest) {
               alignItems: "center",
               justifyContent: "center",
               borderWidth: "4px",
-              borderColor: "black",
-              borderRadius: "9999",
+              borderColor: color, // Border dinamis
+              borderRadius: "9999px",
               padding: "0 2rem",
             }}
           >
+            {/* SVG dengan pola dinamis */}
             <svg
-              width="52"
-              height="62"
-              viewBox="0 0 52 62"
+              width="420"
+              height="144"
+              viewBox="0 0 420 144"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
-              <path
-                d="M21.474 21.1364H32.0743V31.7045H21.474V21.1364Z"
-                fill="black"
-              />
-              <path
-                fill-rule="evenodd"
-                clip-rule="evenodd"
-                d="M46.7734 6.48182V11.4136H51.7202V51.2909H46.5615L46.5614 51.2886H30.3783V62H11.7218V57.0682H6.77496V18.4591H0.273438V0H18.7886V6.48182H46.7734ZM4.23088 14.6545H14.8312V3.94545H4.23088V14.6545ZM10.7324 21.1364V53.1261L21.4034 53.0523L21.4774 42.4136H42.816V10.4273H21.474V21.1364H10.7324Z"
-                fill="black"
-              />
+              {/* Latar belakang lingkaran transparan */}
+              <circle cx="210" cy="72" r="60" fill={color} fillOpacity="0.2" />
+              {/* Pola lingkaran dinamis */}
+              {pattern.map((point, index) => (
+                <circle
+                  key={index}
+                  cx={point.x}
+                  cy={point.y}
+                  r={point.size}
+                  fill={color}
+                  fillOpacity="0.8"
+                />
+              ))}
             </svg>
 
+            {/* Teks dinamis */}
             <div
               style={{
                 display: "flex",
-                background: "black",
+                background: color, // Latar belakang dinamis
                 padding: "0.5rem 1rem",
                 borderRadius: "1rem",
                 height: "80px",
@@ -86,7 +118,7 @@ export async function GET(request: NextRequest) {
               <p
                 style={{
                   fontFamily: '"Inter"',
-                  fontSize: "52px",
+                  fontSize: data && data.length > 7 ? "40px" : "52px", // Font fleksibel
                   color: "white",
                 }}
               >
