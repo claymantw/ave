@@ -1,63 +1,78 @@
 /* eslint-disable @next/next/no-img-element */
 import { ImageResponse } from "next/og";
 import { NextRequest, NextResponse } from "next/server";
+import { ethers } from "ethers";
+import path from "path";
+import { readFile } from "fs/promises";
 
 export const runtime = "edge";
 
 type BaseParams = {
   address: `0x${string}`;
-  data?: string;
+  network?: string; // Parameter untuk memilih jaringan
 };
 
-// Fungsi untuk menghasilkan warna bebas dari hash alamat
-function generateColorsFromAddress(address: string): { primary: string; secondary: string } {
-  const hash = parseInt(address.slice(2, 10), 16);
-  const hue = hash % 360; // Hue penuh (0-360) untuk semua warna
-  const primary = `hsl(${hue}, 70%, 50%)`; // Warna primer
-  const secondary = `hsl(${(hue + 60) % 360}, 80%, 60%)`; // Warna sekunder
-  return { primary, secondary };
+// Konfigurasi jaringan
+const NETWORK_CONFIGS: Record<string, { contractAddress: string; rpcUrl: string }> = {
+  mainnet: {
+    contractAddress: "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+    rpcUrl: `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+  },
+  polygon: {
+    contractAddress: "0xD6DF932A45C0f255f85145f286eA0b292B21C90B",
+    rpcUrl: `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+  },
+  avalanche: {
+    contractAddress: "0x63a72806098Bd3D9520cC43356dD78AFE5D386D9",
+    rpcUrl: `https://avalanche-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+  },
+  optimism: {
+    contractAddress: "0x76FB31fb4af56892A25e32cFC43De717950c9278",
+    rpcUrl: `https://opt-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+  },
+  base: {
+    contractAddress: "0xeA51d7853eEFb32b6ee06b1C12E6dcCA88Be0fFE",
+    rpcUrl: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+  },
+};
+
+// ABI minimal untuk kontrak ERC-20
+const AAVE_ABI = [
+  "function balanceOf(address account) view returns (uint256)"
+];
+
+// Fungsi untuk mendapatkan saldo AAVE
+async function getAaveBalance(address: string, network: string = "mainnet"): Promise<string> {
+  const config = NETWORK_CONFIGS[network] || NETWORK_CONFIGS.mainnet; // Default ke mainnet
+  const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+  const aaveContract = new ethers.Contract(config.contractAddress, AAVE_ABI, provider);
+
+  try {
+    const balance = await aaveContract.balanceOf(address);
+    return ethers.formatUnits(balance, 18); // AAVE memiliki 18 desimal
+  } catch (error) {
+    console.error(`Error fetching AAVE balance on ${network}:`, error);
+    return "0"; // Fallback jika gagal
+  }
 }
 
-// Fungsi untuk menghasilkan pola ombak horizontal
-function generateWavePattern(address: string): { y1: number; y2: number; cx1: number; cy1: number; cx2: number; cy2: number }[] {
-  const waves: { y1: number; y2: number; cx1: number; cy1: number; cx2: number; cy2: number }[] = [];
-  const seed = parseInt(address.slice(2, 10), 16); // Seed dari address
-  const count = 18 + (seed % 4); // Jumlah ombak (18-21)
-
-  for (let i = 0; i < count; i++) {
-    const y = 50 + (i * 900) / (count - 1); // Distribusi vertikal
-    const offset = (seed + i * 41) % 300; // Offset untuk variasi
-    const y1 = y; // Titik awal (kiri)
-    const y2 = y; // Titik akhir (kanan)
-    const cx1 = 250 + (offset % 200) - 100; // Titik kontrol 1
-    const cy1 = y + (offset % 150) - 75; // Ketinggian kontrol 1
-    const cx2 = 750 - (offset % 180) + 90; // Titik kontrol 2
-    const cy2 = y - (offset % 150) + 75; // Ketinggian kontrol 2
-    waves.push({ y1, y2, cx1, cy1, cx2, cy2 });
+// Fungsi untuk memetakan saldo AAVE ke nama file gambar
+function getImageFromBalance(balance: string): string {
+  const balanceNum = parseFloat(balance);
+  if (balanceNum >= 1000) {
+    return "/image/platinum.jpg"; // Saldo >= 1000 AAVE
+  } else if (balanceNum >= 100) {
+    return "/image/gold.jpg"; // Saldo 100-999 AAVE
+  } else if (balanceNum > 0) {
+    return "/image/bronze.jpg"; // Saldo 0.000000000000000001-99 AAVE
+  } else {
+    return "/image/noob.jpg"; // Saldo 0 AAVE
   }
-  return waves;
-}
-
-// Fungsi untuk menghasilkan bintang kecil
-function generateStars(data: string | undefined): { x: number; y: number; size: number; color: string }[] {
-  const stars: { x: number; y: number; size: number; color: string }[] = [];
-  const seed = data ? parseInt(data.slice(2, 10), 16) : 0;
-  const count = data && !isNaN(parseInt(data)) ? parseInt(data) : 5; // Jumlah bintang dari data atau default 5
-
-  for (let i = 0; i < count; i++) {
-    const x = 50 + ((seed + i * 97) % 900); // Posisi x acak
-    const y = 50 + ((seed + i * 53) % 900); // Posisi y acak
-    const size = 5 + ((seed + i) % 5); // Ukuran 5-10 piksel
-    const hue = (seed + i * 137) % 360; // Warna-warni acak
-    const color = `hsl(${hue}, 80%, 70%)`;
-    stars.push({ x, y, size, color });
-  }
-  return stars;
 }
 
 export async function GET(request: NextRequest) {
   const searchParams = new URLSearchParams(request.url?.split("?")[1]);
-  const { address, data } = Object.fromEntries(searchParams.entries()) as BaseParams;
+  const { address, network } = Object.fromEntries(searchParams.entries()) as BaseParams;
 
   // Validasi alamat
   if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
@@ -65,10 +80,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { primary, secondary } = generateColorsFromAddress(address); // Warna bebas dinamis
-    const waves = generateWavePattern(address); // Pola ombak horizontal
-    const stars = generateStars(data); // Bintang kecil
+    // Ambil saldo AAVE dari jaringan yang dipilih
+    const balance = await getAaveBalance(address, network);
+    const imagePath = getImageFromBalance(balance);
 
+    // Baca file gambar dari folder public
+    const filePath = path.join(process.cwd(), "public", imagePath);
+    const imageBuffer = await readFile(filePath);
+
+    // Kembalikan gambar menggunakan ImageResponse
     return new ImageResponse(
       (
         <div
@@ -76,47 +96,14 @@ export async function GET(request: NextRequest) {
             display: "flex",
             width: "100%",
             height: "100%",
-            background: "hsl(220, 20%, 10%)", // Latar belakang gelap (biru tua)
+            background: "hsl(220, 20%, 10%)",
           }}
         >
-          {/* SVG dengan pola ombak dan bintang */}
-          <svg
-            width="1000"
-            height="1000"
-            viewBox="0 0 1000 1000"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {/* Gradien radial untuk latar belakang */}
-            <defs>
-              <radialGradient id="gradient" cx="50%" cy="50%" r="70%">
-                <stop offset="0%" stopColor={secondary} stopOpacity="0.4" />
-                <stop offset="100%" stopColor={primary} stopOpacity="0.1" />
-              </radialGradient>
-            </defs>
-            <rect x="0" y="0" width="1000" height="1000" fill="url(#gradient)" />
-            {/* Pola ombak horizontal melengkung */}
-            {waves.map((wave, index) => (
-              <path
-                key={index}
-                d={`M0,${wave.y1} C${wave.cx1},${wave.cy1} ${wave.cx2},${wave.cy2} 1000,${wave.y2}`}
-                stroke={index % 2 === 0 ? primary : secondary}
-                strokeWidth={10 + (index % 5)} // Ketebalan 10-14
-                strokeOpacity="0.6"
-                fill="none"
-              />
-            ))}
-            {/* Bintang kecil */}
-            {stars.map((star, index) => (
-              <path
-                key={`star-${index}`}
-                d="M0,-10 L2.93,-4.04 L9.51,-3.09 L4.76,1.55 L5.88,8.09 L0,5 L-5.88,8.09 L-4.76,1.55 L-9.51,-3.09 L-2.93,-4.04 Z"
-                transform={`translate(${star.x}, ${star.y}) scale(${star.size / 10})`}
-                fill={star.color}
-                fillOpacity="0.9"
-              />
-            ))}
-          </svg>
+          <img
+            src={`data:image/png;base64,${imageBuffer.toString("base64")}`}
+            alt="Generated Image"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         </div>
       ),
       {
@@ -126,6 +113,6 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error(error);
-    return new Response("Internal server error", { status: 500 });
+    return new Response("Internal server error or image not found", { status: 500 });
   }
 }
